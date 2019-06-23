@@ -4,12 +4,11 @@ import json
 from notebook.services.contents.filemanager import FileContentsManager
 
 
-class IpypyManager(FileContentsManager):
+class SplitManager(FileContentsManager):
     """
-    ContentsManager that persists to a pure python file.
+    ContentsManager that persists data splitted
     """
     allow_hidden = False
-    extension = '.nbdata'
 
     def guess_type(self, path, allow_directory=True):
         """
@@ -17,8 +16,6 @@ class IpypyManager(FileContentsManager):
         If allow_directory is False, don't consider the possibility that the
         file is a directory.
         """
-        if path.endswith(self.extension):
-            return 'notebook_data'
         if path.endswith('.ipynb'):
             return 'notebook'
         elif allow_directory and self.dir_exists(path):
@@ -26,8 +23,114 @@ class IpypyManager(FileContentsManager):
         else:
             return 'file'
 
-    def _get_outputs_uri(self, path):
-        return path + self.extension
+    def _get_splitted_uri(self, path):
+        return path.replace('.ipynb', self.extension)
+
+    def save(self, model, path):
+        """Save a file or directory model to path."""
+        _type = self.guess_type(path)
+        if _type != 'notebook':
+            return super().save(model, path)
+        else:
+            shallow_model, splitted = self._split_model(model)
+            super().save(splitted, self._get_splitted_uri(path))
+            return super().save(shallow_model, path)
+
+    def get(self, path, content=True, type=None, format=None):
+        """Get a file or directory model."""
+        result = super().get(path, content, type, format)
+        if type is None:
+            type = self.guess_type(path)
+        elif type != 'notebook':
+            return result
+        # Now only handling notebooks
+        if content:
+            # look for the splitted file
+            splitted_uri = self._get_splitted_uri(path)
+            if self.file_exists(splitted_uri):
+                splitted_data = super().get(splitted_uri, True, 'file')
+                result = self._merge_model(result, splitted_data)
+        
+        return result
+
+    def is_hidden(self, path):
+        """Is path a hidden directory or file?"""
+        if path.endswith(self.extension):
+            return True
+        return super().is_hidden(path)
+
+
+class SplitCodeManager(SplitManager):
+    """
+    ContentsManager that persists code to a pure code file.
+    """
+    extension = '.ipypy'
+    comment_prefix = '# <cell-init>'
+
+    @classmethod
+    def _comment(cls, key):
+        # Hardcoded python comment
+        return f'{cls.comment_prefix} cell-id: {key}'
+
+    def _split_model(self, model):
+        shallow_model = deepcopy(model)
+        splitted = {'type': 'file', 'format': 'text', 'content': {}}
+        prefix = 'some-hash'
+        for i, cell in enumerate(shallow_model['content']['cells']):
+            if not cell['cell_type'] == 'code':
+                continue
+            key = f'{prefix}-{i}'
+            splitted['content'][key] = cell['source']
+            self._format_cell_after_split(cell, key)
+        
+        # lets format the file now
+        code_lines = []
+        for k, value in splitted['content'].items():
+            code_lines.append(self._comment(k))
+            if isinstance(value, (list, tuple)):
+                code_lines.extend(value)
+            else:
+                code_lines.append(value)
+        splitted['content'] = '\n'.join(code_lines)
+        return shallow_model, splitted
+
+    @staticmethod
+    def _format_cell_after_split(cell, key):
+        cell['source'] = ''
+        cell['metadata']['code_id'] = key
+
+    @staticmethod
+    def _get_split_key(cell):
+        if not cell['cell_type'] == 'code':
+            return None
+        return cell.get('metadata', {}).get('code_id')
+
+    def _merge_model(self, shallow_model, splitted_model):
+        model = deepcopy(shallow_model)
+        chunks = splitted_model.get('content', '').split(self.comment_prefix)
+        code = {}
+        for chunk in chunks:
+            if not chunk:
+                continue
+            head, *lines = chunk.split('\n')
+            if ':' not in head:
+                continue
+            key = head.split(':')[1].strip()
+            code[key] = lines
+        for cell in model['content']['cells']:
+            key = self._get_split_key(cell)
+            if key is None or key not in code:
+                continue
+            cell['source'] = code[key]
+        return model
+
+
+class SplitOutputManager(FileContentsManager):
+    """
+    ContentsManager that persists output to a different file.
+    """
+    allow_hidden = False
+    extension = '.nbout'
 
     def _split_model(self, model):
         shallow_model = deepcopy(model)
@@ -49,20 +152,15 @@ class IpypyManager(FileContentsManager):
             return None
         out_0 = cell['outputs'][0]
         if out_0['output_type'] == 'external':
-            return out_0.get('metadata', {}).get('id')
-        # if out_0['output_type'] == 'stream':
-        #     return out_0.get('metadata', {}).get('external_id')
+            return out_0.get('id')
         return None
 
     @staticmethod
     def _build_external_output(key):
         return [
             {'output_type': 'external',
-             'metadata': {'id': key}
+             'id': key
             }
-            # {'output_type': 'stream', 'text': '',
-            #  'metadata': {'external_id': key}
-            # }
         ]
 
     def _merge_model(self, shallow_model, outputs_model):
@@ -74,36 +172,3 @@ class IpypyManager(FileContentsManager):
                 continue
             cell['outputs'] = outputs.get(key, [])
         return model
-
-    def save(self, model, path):
-        """Save a file or directory model to path."""
-        _type = self.guess_type(path)
-        if _type != 'notebook':
-            return super().save(model, path)
-        else:
-            shallow_model, outputs = self._split_model(model)
-            super().save(outputs, self._get_outputs_uri(path))
-            return super().save(shallow_model, path)
-
-    def get(self, path, content=True, type=None, format=None):
-        """Get a file or directory model."""
-        result = super().get(path, content, type, format)
-        if type is None:
-            type = self.guess_type(path)
-        elif type != 'notebook':
-            return result
-        # Now only handling notebooks
-        if content:
-            # look for the outputs file
-            outputs_uri = self._get_outputs_uri(path)
-            if self.file_exists(outputs_uri):
-                outputs_data = super().get(outputs_uri, True, 'file')
-                result = self._merge_model(result, outputs_data)
-        
-        return result
-
-    def is_hidden(self, path):
-        """Is path a hidden directory or file?"""
-        if path.endswith(self.extension):
-            return True
-        return super().is_hidden(path)
