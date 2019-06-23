@@ -112,10 +112,14 @@ class SplitCodeManager(SplitManager):
         for chunk in chunks:
             if not chunk:
                 continue
-            head, *lines = chunk.split('\n')
+            head, *lines = chunk.splitlines(keepends=True)
             if ':' not in head:
                 continue
             key = head.split(':')[1].strip()
+            if lines:
+                last_line = lines[-1]
+                if last_line.endswith('\n'):  # there is always an extra newline added
+                    lines[-1] = last_line[:-1]  # removed extra
             code[key] = lines
         for cell in model['content']['cells']:
             key = self._get_split_key(cell)
