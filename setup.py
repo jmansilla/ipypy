@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ipypy',
-    version='1.0.0',
+    version='0.1',
     url='',
     description='ipypy notebook format',
     packages=find_packages(),
