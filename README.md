@@ -8,7 +8,9 @@ You can pick between a SplitCodeManager, which stores each notebook in:
 
 Or, a SplitOutputManager, which stores each notebook in:
   * my_file.ipynb (the usual notebook file, but without the cells output)
-  * my_file.nbout (a pure code file that stores only the actual source code)
+  * my_file.nbout (a json file that stores only the outputs of each cell)
+
+This way, you can pay better attention to the actual code modifications of your notebooks while reviewing changes.
 
 ## Installation
 
