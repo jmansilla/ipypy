@@ -12,6 +12,21 @@ Or, a SplitOutputManager, which stores each notebook in:
 
 This way, you can pay better attention to the actual code modifications of your notebooks while reviewing changes.
 
+## Benefits
+
+* You can now import your notebook from another file
+* You can now use standard coding tools and practices for manipulating code:
+  * testing
+  * editors
+  * refactoring
+  * ...
+* The source code of your notebook, in a code versioning repository, now makes sense. It's code.
+* You can choose to simply ignore the metadata files (.ipynb) in the repository, or keep them versioned. It's up to you.
+
+## Warning
+
+We are in beta. Once you open a notebook with this extension enabled, and later save it, your notebook will be saved in a format a bit incompatible.
+
 ## Installation
 
     $ pip install ipypy
