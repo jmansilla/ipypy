@@ -1,6 +1,12 @@
 # ipypy
 
-Store Jupyter Notebooks in a more repo and coding friendly way.
+    Store Jupyter Notebooks in a more repo and coding friendly way.
+
+Have you ever noticed that a Jupuyter Notebook nowadays is a json file? Containing together the metadata of the notebook itself, the list of cells, and for each cell, not only the *source* (what was written on it), but also the *outputs*, and *metadata* for each cell.
+
+This project attemps to propose an alternative for that. 
+
+## How
 
 You can pick between a SplitCodeManager, which stores each notebook in:
   * my_file.ipynb (the usual notebook file, but with source information extracted)
@@ -10,18 +16,19 @@ Or, a SplitOutputManager, which stores each notebook in:
   * my_file.ipynb (the usual notebook file, but without the cells output)
   * my_file.nbout (a json file that stores only the outputs of each cell)
 
-This way, you can pay better attention to the actual code modifications of your notebooks while reviewing changes.
 
 ## Benefits
 
 * You can now import your notebook from another file
-* You can now use standard coding tools and practices for manipulating code:
+* You can now use standard coding tools and practices for manipulating Notebooks code:
   * testing
-  * editors
+  * import code defined in there
+  * editable naturally by any editor
   * refactoring
+  * tracking changes
   * ...
-* The source code of your notebook, in a code versioning repository, now makes sense. It's code.
-* You can choose to simply ignore the metadata files (.ipynb) in the repository, or keep them versioned. It's up to you.
+* The source code of your notebook, can be versioned in a repository, where diffs, and history is readable. Now makes sense. It's code.
+* (Work In Progress) You can choose to simply ignore the metadata files (.ipynb) in the repository, or keep them versioned. It should be up to you.
 
 ## Warning
 
