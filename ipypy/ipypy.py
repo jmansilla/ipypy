@@ -1,4 +1,5 @@
 from copy import deepcopy
+from itertools import repeat
 import json
 
 from notebook.services.contents.filemanager import FileContentsManager
@@ -105,27 +106,47 @@ class SplitCodeManager(SplitManager):
             return None
         return cell.get('metadata', {}).get('code_id')
 
-    def _merge_model(self, shallow_model, splitted_model):
-        model = deepcopy(shallow_model)
-        chunks = splitted_model.get('content', '').split(self.comment_prefix)
+    def _parse_source_data(self, data):
+        chunks = data.get('content', '').split(self.comment_prefix)
         code = {}
+        detached_code = []  # someone inserted new cells directly in code file
         for chunk in chunks:
             if not chunk:
                 continue
             head, *lines = chunk.splitlines(keepends=True)
-            if ':' not in head:
-                continue
-            key = head.split(':')[1].strip()
+            if ':' in head:
+                key = head.split(':')[1].strip()
+            else:
+                key = None
             if lines:
                 last_line = lines[-1]
                 if last_line.endswith('\n'):  # there is always an extra newline added
                     lines[-1] = last_line[:-1]  # removed extra
-            code[key] = lines
+            if key:
+                code[key] = lines
+            else:
+                detached_code.append(lines)
+        return code, detached_code
+
+    def _merge_model(self, shallow_model, splitted_model):
+        model = deepcopy(shallow_model)
+        code, detached_code = self._parse_source_data(splitted_model)
+
         for cell in model['content']['cells']:
             key = self._get_split_key(cell)
             if key is None or key not in code:
                 continue
-            cell['source'] = code[key]
+            cell['source'] = code.pop(key)
+        new_cells = list(code.items())  # unused source lines
+        new_cells += zip(repeat(None), detached_code)
+        for extra_key, source_lines in new_cells:
+            model['content']['cells'].append(
+                { "cell_type" : "code",
+                  "metadata" : {'code_id': extra_key},
+                  "source" : source_lines,
+                  "outputs": [],
+                }
+            )
         return model
 
 
